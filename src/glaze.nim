@@ -1,4 +1,4 @@
-import std/[macros, macrocache, typetraits, strutils, tables], holo_map/variants
+import std/[macros, macrocache, typetraits, strutils, tables], cosm/variants
 
 type
   DeglazeFormat* = object
