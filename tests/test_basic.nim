@@ -1,4 +1,4 @@
-import cosm
+import glaze
 
 type
   Enum = enum
@@ -20,9 +20,8 @@ type
 
 macro test(): untyped =
   let obj1 = Bar(a: "foo", b: 1, c: 123, d: true, notRenamed: "bar", e: @{"name1": Enum1, "name3": Enum3, "name2": Enum2})
-  let ser = marshal(CosmMarshalFormat(), obj1)
-  var deser: Bar
-  read(CosmReadFormat(), ser, deser)
+  let ser = glaze(obj1)
+  let deser = deglaze(ser, Bar)
   doAssert obj1.a == deser.a
   doAssert obj1.b == deser.b
   doAssert obj1.c == deser.c

@@ -1,4 +1,4 @@
-name: cosm
+name: glaze
 
 on:
   push:

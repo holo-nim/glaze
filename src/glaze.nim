@@ -1,38 +1,38 @@
 import std/[macros, macrocache, typetraits, strutils, tables], holo_map/variants
 
 type
-  CosmReadFormat* = object
-  CosmMarshalFormat* = object
-  CosmError* = object of ValueError
+  DeglazeFormat* = object
+  GlazeFormat* = object
+  GlazeError* = object of ValueError
 
-const cosmDumpErrorNode* {.strdefine.} = ""
+const glazeDumpErrorNode* {.strdefine.} = ""
   ## what way to dump a node on an error
   ## if "repr", uses `repr` 
   ## if "tree", uses `treeRepr`
   ## otherwise, does not dump the node
 
-proc cosmError(msg: string, node: NimNode) =
-  when cosmDumpErrorNode == "repr":
+proc glazeError(msg: string, node: NimNode) =
+  when glazeDumpErrorNode == "repr":
     echo repr(node)
-  elif cosmDumpErrorNode == "tree":
+  elif glazeDumpErrorNode == "tree":
     echo treeRepr(node)
   # XXX maybe created nodes get line info from stacktrace
-  raise newException(CosmError, node.lineInfo & " " & msg)
+  raise newException(GlazeError, node.lineInfo & " " & msg)
 
-proc cosmExpectKind(node: NimNode, kind: NimNodeKind) =
+proc glazeExpectKind(node: NimNode, kind: NimNodeKind) =
   if node.kind != kind:
-    cosmError("expected node of kind " & $kind & ", got " & $node.kind, node)
+    glazeError("expected node of kind " & $kind & ", got " & $node.kind, node)
 
-proc cosmExpectKinds(node: NimNode, kinds: set[NimNodeKind]) =
+proc glazeExpectKinds(node: NimNode, kinds: set[NimNodeKind]) =
   if node.kind notin kinds:
-    cosmError("expected node of kinds " & $kinds & ", got " & $node.kind, node)
+    glazeError("expected node of kinds " & $kinds & ", got " & $node.kind, node)
 
-proc cosmExpectLen(node: NimNode, len: int) =
+proc glazeExpectLen(node: NimNode, len: int) =
   if node.len != len:
-    cosmError("expected node length " & $len & ", got " & $node.kind & " of len " & $node.len, node)
+    glazeError("expected node length " & $len & ", got " & $node.kind & " of len " & $node.len, node)
 
 template marshalLitImpl(T) =
-  proc marshal*(format: CosmMarshalFormat, val: T): NimNode =
+  proc marshal*(format: GlazeFormat, val: T): NimNode =
     newLit val
 
 marshalLitImpl int
@@ -54,24 +54,24 @@ marshalLitImpl string
 
 marshalLitImpl char
 
-proc marshal*(format: CosmMarshalFormat, val: cstring): NimNode =
+proc marshal*(format: GlazeFormat, val: cstring): NimNode =
   newCall(bindSym"cstring", newLit $val)
 
 {.push hint[ConvFromXtoItselfNotNeeded]: off.}
 
 template readIntImpl(T) {.dirty.} =
-  proc read*(format: CosmReadFormat, node: NimNode, val: var T) =
-    cosmExpectKinds node, {nnkIntLit..nnkInt64Lit}
+  proc read*(format: DeglazeFormat, node: NimNode, val: var T) =
+    glazeExpectKinds node, {nnkIntLit..nnkInt64Lit}
     val = T(node.intVal)
 
 template readUintImpl(T) {.dirty.} =
-  proc read*(format: CosmReadFormat, node: NimNode, val: var T) =
-    cosmExpectKinds node, {nnkUIntLit..nnkUInt64Lit}
+  proc read*(format: DeglazeFormat, node: NimNode, val: var T) =
+    glazeExpectKinds node, {nnkUIntLit..nnkUInt64Lit}
     val = cast[T](node.intVal)
 
 template readFloatImpl(T) {.dirty.} =
-  proc read*(format: CosmReadFormat, node: NimNode, val: var T) =
-    cosmExpectKinds node, {nnkFloatLit..nnkFloat128Lit}
+  proc read*(format: DeglazeFormat, node: NimNode, val: var T) =
+    glazeExpectKinds node, {nnkFloatLit..nnkFloat128Lit}
     val = T(node.floatVal)
 
 readIntImpl int
@@ -91,11 +91,11 @@ readFloatImpl float32
 
 {.pop.}
 
-proc read*(format: CosmReadFormat, node: NimNode, val: var string) =
-  cosmExpectKinds node, {nnkStrLit..nnkTripleStrLit}
+proc read*(format: DeglazeFormat, node: NimNode, val: var string) =
+  glazeExpectKinds node, {nnkStrLit..nnkTripleStrLit}
   val = node.strVal
 
-proc read*(format: CosmReadFormat, node: NimNode, val: var cstring) =
+proc read*(format: DeglazeFormat, node: NimNode, val: var cstring) =
   case node.kind
   of nnkStrLit..nnkTripleStrLit:
     val = cstring(node.strVal)
@@ -103,16 +103,16 @@ proc read*(format: CosmReadFormat, node: NimNode, val: var cstring) =
     expectLen node, 2
     read(format, node[1], val)
   else:
-    cosmError "expected cstring but got: " & $node.kind, node
+    glazeError "expected cstring but got: " & $node.kind, node
 
-proc read*(format: CosmReadFormat, node: NimNode, val: var char) =
-  cosmExpectKinds node, {nnkCharLit..nnkUInt64Lit} # ?
+proc read*(format: DeglazeFormat, node: NimNode, val: var char) =
+  glazeExpectKinds node, {nnkCharLit..nnkUInt64Lit} # ?
   val = cast[char](node.intVal)
 
-proc marshal*(format: CosmMarshalFormat, val: bool): NimNode =
+proc marshal*(format: GlazeFormat, val: bool): NimNode =
   result = if val: ident"true" else: ident"false"
 
-proc read*(format: CosmReadFormat, node: NimNode, val: var bool) =
+proc read*(format: DeglazeFormat, node: NimNode, val: var bool) =
   case node.kind
   of nnkCharLit..nnkUInt64Lit:
     val = bool(node.intVal)
@@ -124,11 +124,11 @@ proc read*(format: CosmReadFormat, node: NimNode, val: var bool) =
     elif node.eqIdent"false":
       val = false
     else:
-      cosmError("expected true or false, got: " & $node, node)
+      glazeError("expected true or false, got: " & $node, node)
   else:
-    cosmError("expected bool, got " & $node.kind, node)
+    glazeError("expected bool, got " & $node.kind, node)
 
-proc marshal*[T: enum](format: CosmMarshalFormat, val: T): NimNode =
+proc marshal*[T: enum](format: GlazeFormat, val: T): NimNode =
   result = newCall(getTypeInst(T), newLit(ord(val)))
 
 macro enumSymbolsCase(T: typedesc, name: string) =
@@ -150,7 +150,7 @@ macro enumSymbolsCase(T: typedesc, name: string) =
     else:
       break
   if impl.kind != nnkEnumTy:
-    cosmError "expected enum type for type impl of " & repr(T), impl
+    glazeError "expected enum type for type impl of " & repr(T), impl
   for i in 1 ..< impl.len:
     let field = nimIdentNormalize($impl[i])
     var b = newNimNode(nnkOfBranch, name)
@@ -158,7 +158,7 @@ macro enumSymbolsCase(T: typedesc, name: string) =
     b.add newAssignment(ident"val", impl[i])
     result.add b
 
-proc read*[T: enum](format: CosmReadFormat, node: NimNode, val: var T) =
+proc read*[T: enum](format: DeglazeFormat, node: NimNode, val: var T) =
   case node.kind
   of nnkCharLit..nnkUInt64Lit:
     val = T(node.intVal)
@@ -172,21 +172,21 @@ proc read*[T: enum](format: CosmReadFormat, node: NimNode, val: var T) =
     expectLen node, 2
     read(format, node[1], val)
   else:
-    cosmError("expected " & $T & ", got " & $node.kind, node)
+    glazeError("expected " & $T & ", got " & $node.kind, node)
 
-proc marshal*[T: distinct](format: CosmMarshalFormat, val: T): NimNode =
+proc marshal*[T: distinct](format: GlazeFormat, val: T): NimNode =
   marshal(format, distinctBase(T)(val))
 
-proc read*[T: distinct](format: CosmReadFormat, node: NimNode, val: var T) =
+proc read*[T: distinct](format: DeglazeFormat, node: NimNode, val: var T) =
   read(format, node, distinctBase(T)(val))
 
-proc marshal*[I, T](format: CosmMarshalFormat, val: array[I, T]): NimNode =
+proc marshal*[I, T](format: GlazeFormat, val: array[I, T]): NimNode =
   result = newNimNode(nnkBracket)
   for a in val:
     result.add marshal(format, a)
 
-proc read*[I, T](format: CosmReadFormat, node: NimNode, val: var array[I, T]) =
-  cosmExpectKind node, nnkBracket # nnkTableConstr not supported
+proc read*[I, T](format: DeglazeFormat, node: NimNode, val: var array[I, T]) =
+  glazeExpectKind node, nnkBracket # nnkTableConstr not supported
   expectLen node, len(val)
   var i = 0
   for a in val.mitems:
@@ -195,31 +195,31 @@ proc read*[I, T](format: CosmReadFormat, node: NimNode, val: var array[I, T]) =
     read(format, n, a)
     inc i
 
-proc marshal*[T](format: CosmMarshalFormat, val: seq[T]): NimNode =
+proc marshal*[T](format: GlazeFormat, val: seq[T]): NimNode =
   result = newNimNode(nnkBracket)
   for a in val:
     result.add marshal(format, a)
   result = newCall(bindSym"@", result)
 
-proc read*[T](format: CosmReadFormat, node: NimNode, val: var seq[T]) =
+proc read*[T](format: DeglazeFormat, node: NimNode, val: var seq[T]) =
   var node = node
   if node.kind in nnkCallKinds and node[0].eqIdent"@":
     node = node[1]
-  cosmExpectKind node, nnkBracket # nnkTableConstr not supported
+  glazeExpectKind node, nnkBracket # nnkTableConstr not supported
   val.setLen(node.len)
   for i in 0 ..< node.len:
     var n = node[i]
     if n.kind == nnkExprColonExpr: n = n[1]
     read(format, n, val[i])
 
-proc marshal*[T: tuple](format: CosmMarshalFormat, val: T): NimNode =
+proc marshal*[T: tuple](format: GlazeFormat, val: T): NimNode =
   result = newNimNode(nnkTupleConstr)
   for a in val.fields:
     result.add marshal(format, a)
 
-proc read*[T: tuple](format: CosmReadFormat, node: NimNode, val: var T) =
-  cosmExpectKinds node, {nnkTupleConstr, nnkPar}
-  cosmExpectLen node, arity(T)
+proc read*[T: tuple](format: DeglazeFormat, node: NimNode, val: var T) =
+  glazeExpectKinds node, {nnkTupleConstr, nnkPar}
+  glazeExpectLen node, arity(T)
   var i = 0
   for a in val.fields:
     var n = node[i]
@@ -235,11 +235,11 @@ proc iterFieldSyms(syms: var Table[string, NimNode], list: NimNode) =
   of nnkRecCase:
     iterFieldSyms(syms, list[0])
     for bi in 1 ..< list.len:
-      cosmExpectKinds list[bi], {nnkOfBranch, nnkElifBranch, nnkElse}
+      glazeExpectKinds list[bi], {nnkOfBranch, nnkElifBranch, nnkElse}
       iterFieldSyms(syms, list[bi][^1])
   of nnkRecWhen:
     for bi in 0 ..< list.len:
-      cosmExpectKinds list[bi], {nnkElifBranch, nnkElse}
+      glazeExpectKinds list[bi], {nnkElifBranch, nnkElse}
       iterFieldSyms(syms, list[bi][^1])
   of nnkIdentDefs:
     for i in 0 ..< list.len - 2:
@@ -253,7 +253,7 @@ proc iterFieldSyms(syms: var Table[string, NimNode], list: NimNode) =
     syms[$list] = list
   of nnkDiscardStmt, nnkNilLit, nnkEmpty: discard
   else:
-    cosmError "unknown object field AST kind " & $list.kind, list
+    glazeError "unknown object field AST kind " & $list.kind, list
 
 proc collectFieldSyms(T: typedesc): Table[string, NimNode] =
   var t = getTypeImpl(T)
@@ -282,9 +282,9 @@ proc collectFieldSyms(T: typedesc): Table[string, NimNode] =
         expectKind impl[1], nnkOfInherit
         t = impl[1][0]
     else:
-      cosmError "got unknown object type kind " & $impl.kind, impl
+      glazeError "got unknown object type kind " & $impl.kind, impl
 
-proc marshal*[T: object | ref object](format: CosmMarshalFormat, val: T): NimNode =
+proc marshal*[T: object | ref object](format: GlazeFormat, val: T): NimNode =
   result = newNimNode(nnkObjConstr)
   result.add getTypeInst(T) #typeToNode(T)
   let syms = collectFieldSyms(T) # XXX cache this
@@ -293,14 +293,14 @@ proc marshal*[T: object | ref object](format: CosmMarshalFormat, val: T): NimNod
       syms[name],
       marshal(format, a))
 
-proc read*[T: object | ref object](format: CosmReadFormat, node: NimNode, val: var T) =
-  cosmExpectKind node, nnkObjConstr
+proc read*[T: object | ref object](format: DeglazeFormat, node: NimNode, val: var T) =
+  glazeExpectKind node, nnkObjConstr
   # XXX this is wacky but unfortunately hard to write some other way since
   # static nodes of object variants can contain inaccessible fields
   var fieldNodes: seq[NimNode] = @[] # a table from names to field vals, but iterated manually with `eqIdent`
   for i in 1 ..< node.len:
     let ex = node[i]
-    cosmExpectKind ex, nnkExprColonExpr
+    glazeExpectKind ex, nnkExprColonExpr
     fieldNodes.add ex
   when val is ref:
     val = T()
@@ -325,17 +325,26 @@ proc read*[T: object | ref object](format: CosmReadFormat, node: NimNode, val: v
         break
 
 # hack, grows indefinitely:
-const nimNodeLitCache* = CacheSeq"cosm.nimnodelits"
+const nimNodeLitCache* = CacheSeq"glaze.nimnodelits"
 
 proc getCachedNode(i: int): NimNode = nimNodeLitCache[i]
 
-proc marshal*(format: CosmMarshalFormat, node: NimNode): NimNode =
+proc marshal*(format: GlazeFormat, node: NimNode): NimNode =
   let index = len(nimNodeLitCache)
   nimNodeLitCache.add node
   result = newCall(bindSym"getCachedNode", newLit index)
 
-proc read*(format: CosmReadFormat, node: NimNode, val: var NimNode) =
+proc read*(format: DeglazeFormat, node: NimNode, val: var NimNode) =
   if node.kind in nnkCallKinds and node.len == 2 and node[0].eqIdent"getCachedNode" and node[1].kind in {nnkIntLit..nnkUInt64Lit}:
     val = nimNodeLitCache[node[1].intVal]
   else:
-    cosmError "expected nimnode literal generated by cosm, got " & $node.kind, node
+    glazeError "expected nimnode literal generated by glaze, got " & $node.kind, node
+
+proc glaze*[T](val: T, format = GlazeFormat()): NimNode =
+  marshal(format, val)
+
+proc deglaze*[T](node: NimNode, val: var T, format = DeglazeFormat()) =
+  read(format, node, val)
+
+proc deglaze*[T](node: NimNode, _: typedesc[T], format = DeglazeFormat()): T =
+  read(format, node, result)
