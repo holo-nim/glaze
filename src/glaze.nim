@@ -31,7 +31,7 @@ proc glazeExpectLen(node: NimNode, len: int) =
   if node.len != len:
     glazeError("expected node length " & $len & ", got " & $node.kind & " of len " & $node.len, node)
 
-template marshalLitImpl(T) =
+template marshalLitImpl(T) {.dirty.} =
   proc marshal*(format: GlazeFormat, val: T): NimNode =
     newLit val
 
