@@ -172,15 +172,32 @@ proc read*[T: enum](format: DeglazeFormat, node: NimNode, val: var T) =
     enumSymbolsCase(T, name)
   of nnkConv, nnkHiddenStdConv, nnkHiddenSubConv, nnkCallKinds:
     expectLen node, 2
+    # XXX type integrity not checked
     read(format, node[1], val)
   else:
     glazeError("expected " & $T & ", got " & $node.kind, node)
 
+template glazeDistinct(T, val: typed): untyped =
+  # getTypeInst does not work with typedesc arguments without workaround of wrapping in `type`
+  T(val)
+
+proc getGlazeDistinctSym(): NimNode =
+  # not generic needed
+  bindSym"glazeDistinct"
+
 proc marshal*[T: distinct](format: GlazeFormat, val: T): NimNode =
-  marshal(format, distinctBase(T)(val))
+  newCall(getGlazeDistinctSym(), getTypeInst(T), marshal(format, distinctBase(T)(val)))
 
 proc read*[T: distinct](format: DeglazeFormat, node: NimNode, val: var T) =
-  read(format, node, distinctBase(T)(val))
+  var n = node
+  if n.kind in nnkCallKinds and n.len == 3 and n[0].eqIdent"glazeDistinct":
+    # XXX type integrity not checked
+    n = n[2]
+  when false: # not safe since distinct is nested
+    if n.kind in {nnkConv, nnkHiddenStdConv, nnkHiddenSubConv}:
+      # XXX type integrity not checked
+      n = n[2]
+  read(format, n, distinctBase(T)(val))
 
 proc marshal*[I, T](format: GlazeFormat, val: array[I, T]): NimNode =
   result = newNimNode(nnkBracket)

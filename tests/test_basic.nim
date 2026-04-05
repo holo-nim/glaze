@@ -3,6 +3,7 @@ import glaze
 type
   Enum = enum
     Enum1, Enum2, Enum3
+  Distinct = distinct string
 
   Foo {.inheritable.} = object
     a: string
@@ -13,13 +14,15 @@ type
       d: bool
     else:
       discard
-    notRenamed: string
+    notRenamed: Distinct
 
   Bar = ref object of Foo
     e: seq[tuple[name: string, val: Enum]]
 
+proc `==`(a, b: Distinct): bool {.borrow.}
+
 macro test(): untyped =
-  let obj1 = Bar(a: "foo", b: 1, c: 123, d: true, notRenamed: "bar", e: @{"name1": Enum1, "name3": Enum3, "name2": Enum2})
+  let obj1 = Bar(a: "foo", b: 1, c: 123, d: true, notRenamed: Distinct"bar", e: @{"name1": Enum1, "name3": Enum3, "name2": Enum2})
   let ser = glaze(obj1)
   let deser = deglaze(ser, Bar)
   doAssert obj1.a == deser.a
@@ -35,5 +38,5 @@ doAssert bar.a == "foo"
 doAssert bar.b == 1
 doAssert bar.c == 123
 doAssert bar.d == true
-doAssert bar.notRenamed == "bar"
+doAssert bar.notRenamed.string == "bar"
 doAssert bar.e == @{"name1": Enum1, "name3": Enum3, "name2": Enum2}
